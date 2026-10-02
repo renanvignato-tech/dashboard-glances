@@ -56,6 +56,10 @@ var MACHINE_COLORS = [
 
 function initDashboard(username) {
   TOKEN = getToken();
+  var savedCpuMin = localStorage.getItem('cpuMinFilter');
+  if (savedCpuMin !== null) {
+    document.getElementById('cpuMinFilter').value = savedCpuMin;
+  }
   loadLayouts();
   loadPages();
   loadAllMachinesList();
@@ -456,8 +460,13 @@ function getFilteredMachines() {
   var showNet = document.getElementById('filterNet').checked;
   var showProc = document.getElementById('filterProc').checked;
   var sortBy = document.getElementById('sortBy').value;
+  var cpuMin = parseFloat(document.getElementById('cpuMinFilter').value) || 0;
+  localStorage.setItem('cpuMinFilter', cpuMin);
   var filtered = machinesData.filter(function(m) {
-    return checkedMachines[m.machine.id];
+    if (!checkedMachines[m.machine.id]) return false;
+    // CPU minimum filter: hide machines with CPU below threshold (always show offline)
+    if (m.status === 'online' && m.cpu && (m.cpu.total || 0) < cpuMin) return false;
+    return true;
   });
   filtered.sort(function(a, b) {
     if (sortBy === 'name') return a.machine.name.localeCompare(b.machine.name);

@@ -40,6 +40,14 @@
       <label class="toggle"><input type="checkbox" id="filterNet" checked onchange="applyFilters()"><span class="toggle-track"></span><span class="toggle-label">{{ translations.dashboard.network }}</span></label>
       <label class="toggle"><input type="checkbox" id="filterProc" checked onchange="applyFilters()"><span class="toggle-track"></span><span class="toggle-label">{{ translations.dashboard.procs }}</span></label>
     </div>
+    <div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)">
+      <label style="font-size:0.78rem;color:var(--text-muted);display:flex;align-items:center;gap:0.4rem">
+        CPU mín.:
+        <input type="number" id="cpuMinFilter" min="0" max="100" step="0.1" value="1.5" onchange="applyFilters()"
+          style="width:60px;padding:0.2rem 0.3rem;font-size:0.78rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-secondary);color:var(--text-primary)">
+        %
+      </label>
+    </div>
   </div>
   <div class="sidebar-section">
     <h3>{{ translations.dashboard.sort_by }}</h3>
