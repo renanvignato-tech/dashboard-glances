@@ -21,6 +21,7 @@
       <button class="tab-btn active" data-tab="tab-users">{{ translations.settings.users }}</button>
       <button class="tab-btn" data-tab="tab-machines">{{ translations.settings.machines }}</button>
       <button class="tab-btn" data-tab="tab-backup">{{ translations.settings.backup }}</button>
+      <button class="tab-btn" data-tab="tab-update">🔄 Atualização</button>
       <button class="tab-btn" data-tab="tab-setup">{{ translations.settings.install }}</button>
       <button class="tab-btn" data-tab="tab-alerts">{{ translations.settings.alerts }}</button>
       {% endif %}
@@ -113,6 +114,46 @@
         <div class="backup-actions">
           <button class="btn-primary" onclick="createBackup()" style="width:auto;padding:0.5rem 1.2rem">{{ translations.settings.create_backup }}</button>
           <div id="backupList" class="backup-list"></div>
+        </div>
+      </div>
+
+      <!-- ABA ATUALIZAÇÃO -->
+      <div class="tab-panel" id="tab-update">
+        <h3>🔄 Atualização do Dashboard</h3>
+        <p class="section-desc">Verifique e aplique atualizações do dashboard diretamente pela web. O banco de dados nunca é afetado.</p>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin-top:1rem">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem">
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">Versão atual</div>
+              <div id="updCurrentSha" style="font-size:0.95rem;font-weight:600;font-family:monospace">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">Branch</div>
+              <div id="updBranch" style="font-size:0.95rem;font-weight:600">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">Última verificação</div>
+              <div id="updLastCheck" style="font-size:0.95rem">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">Última atualização</div>
+              <div id="updLastApply" style="font-size:0.95rem">—</div>
+            </div>
+          </div>
+
+          <div id="updStatus" style="margin-top:1rem;padding:0.75rem;border-radius:var(--radius-sm);font-size:0.85rem;display:none"></div>
+
+          <div style="margin-top:1.2rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
+            <button class="btn-secondary" id="btnCheckUpdate" onclick="checkForUpdates()" style="width:auto;padding:0.5rem 1.2rem">🔍 Verificar Atualização</button>
+            <button class="btn-primary" id="btnApplyUpdate" onclick="applyUpdate()" style="width:auto;padding:0.5rem 1.2rem;display:none">⬇️ Aplicar Atualização</button>
+            <span id="updResult" style="font-size:0.85rem"></span>
+          </div>
+
+          <div style="margin-top:1rem;font-size:0.78rem;color:var(--text-muted)">
+            <p>ℹ️ Verificação automática a cada 7 dias. O botão "Verificar" força uma checagem imediata.</p>
+            <p>⚠️ Ao aplicar, o serviço reinicia automaticamente. Sessões ativas serão reconectadas.</p>
+          </div>
         </div>
       </div>
 

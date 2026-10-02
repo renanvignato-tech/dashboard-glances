@@ -68,6 +68,7 @@ function loadSettings() {
   if (IS_ADMIN) {
     loadUsers();
     loadBackups();
+    loadUpdateStatus();
   }
 }
 
@@ -509,4 +510,116 @@ function saveAlertMachines() {
     r.style.color = d.message ? 'var(--green)' : 'var(--red)';
     r.textContent = d.message || d.detail || 'Erro';
   });
+}
+
+// ============================================================
+// DASHBOARD UPDATE
+// ============================================================
+
+function loadUpdateStatus() {
+  api('GET', '/system/update/status').then(function(d) {
+    if (d.error) return;
+    document.getElementById('updCurrentSha').textContent = d.local_sha || '—';
+    document.getElementById('updBranch').textContent = d.branch || '—';
+    document.getElementById('updLastCheck').textContent = d.last_check ? formatDate(d.last_check) : 'Nunca';
+    document.getElementById('updLastApply').textContent = d.last_apply ? formatDate(d.last_apply) : 'Nunca';
+
+    if (d.has_update) {
+      showUpdStatus('update', 'Atualização disponível: ' + d.remote_sha + ' → clique em "Aplicar Atualização"');
+      document.getElementById('btnApplyUpdate').style.display = '';
+    } else {
+      showUpdStatus('ok', 'Você está na versão mais recente.');
+    }
+
+    // Auto-check se última verificação > 7 dias
+    autoCheckUpdate(d.last_check);
+  });
+}
+
+function autoCheckUpdate(lastCheck) {
+  if (!lastCheck) {
+    // Nunca verificou → verificar agora
+    checkForUpdates();
+    return;
+  }
+  var last = new Date(lastCheck);
+  var now = new Date();
+  var daysDiff = (now - last) / (1000 * 60 * 60 * 24);
+  if (daysDiff >= 7) {
+    checkForUpdates();
+  }
+}
+
+function checkForUpdates() {
+  var btn = document.getElementById('btnCheckUpdate');
+  var res = document.getElementById('updResult');
+  btn.disabled = true;
+  btn.textContent = '🔍 Verificando...';
+  res.textContent = '';
+
+  api('POST', '/system/update/check').then(function(d) {
+    btn.disabled = false;
+    btn.textContent = '🔍 Verificar Atualização';
+    if (d.error) {
+      showUpdStatus('error', 'Erro: ' + d.error);
+      return;
+    }
+    document.getElementById('updLastCheck').textContent = formatDate(d.last_check);
+    if (d.has_update) {
+      showUpdStatus('update', 'Atualização disponível! Local: ' + d.local_sha + ' → Remoto: ' + d.remote_sha);
+      document.getElementById('btnApplyUpdate').style.display = '';
+    } else {
+      showUpdStatus('ok', 'Você está na versão mais recente (' + d.local_sha + ').');
+      document.getElementById('btnApplyUpdate').style.display = 'none';
+    }
+  });
+}
+
+function applyUpdate() {
+  if (!confirm('Aplicar atualização do Dashboard? O serviço será reiniciado.')) return;
+  var btn = document.getElementById('btnApplyUpdate');
+  var res = document.getElementById('updResult');
+  btn.disabled = true;
+  btn.textContent = '⬇️ Atualizando...';
+  res.textContent = '';
+
+  api('POST', '/system/update/apply').then(function(d) {
+    if (d.success) {
+      showUpdStatus('ok', 'Atualizado para ' + d.new_sha + '! Recarregando...');
+      res.style.color = 'var(--green)';
+      res.textContent = d.message;
+      setTimeout(function() { location.reload(); }, 3000);
+    } else {
+      btn.disabled = false;
+      btn.textContent = '⬇️ Aplicar Atualização';
+      showUpdStatus('error', 'Erro: ' + d.error);
+    }
+  });
+}
+
+function showUpdStatus(type, msg) {
+  var el = document.getElementById('updStatus');
+  el.style.display = 'block';
+  el.textContent = msg;
+  if (type === 'ok') {
+    el.style.background = 'rgba(34,197,94,0.1)';
+    el.style.border = '1px solid var(--green)';
+    el.style.color = 'var(--green)';
+  } else if (type === 'update') {
+    el.style.background = 'rgba(234,179,8,0.1)';
+    el.style.border = '1px solid #eab308';
+    el.style.color = '#eab308';
+  } else {
+    el.style.background = 'rgba(239,68,68,0.1)';
+    el.style.border = '1px solid var(--red)';
+    el.style.color = 'var(--red)';
+  }
+}
+
+function formatDate(isoStr) {
+  try {
+    return new Date(isoStr).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch(e) {
+    return isoStr;
+  }
 }
