@@ -708,6 +708,7 @@ select {
   border-bottom: 2px solid var(--border);
   margin-bottom: 1.25rem;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
 .tab-btn {
