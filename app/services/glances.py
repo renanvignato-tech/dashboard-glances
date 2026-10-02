@@ -1,7 +1,12 @@
 import requests
 import json
+import threading
 from datetime import datetime, timezone
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+_api_version_cache: dict = {}
+_cache_lock = threading.Lock()
 
 
 class GlancesClient:
@@ -9,11 +14,45 @@ class GlancesClient:
         self.base_url = f"http://{host}:{port}"
         self.timeout = timeout
         self.session = requests.Session()
+        self._api_version: Optional[str] = None
+
+    def _detect_api_version(self) -> str:
+        cache_key = self.base_url
+        with _cache_lock:
+            if cache_key in _api_version_cache:
+                self._api_version = _api_version_cache[cache_key]
+                return self._api_version
+
+        for ver in ("4", "3"):
+            try:
+                resp = self.session.get(
+                    f"{self.base_url}/api/{ver}/version",
+                    timeout=3,
+                )
+                if resp.status_code == 200:
+                    self._api_version = ver
+                    with _cache_lock:
+                        _api_version_cache[cache_key] = ver
+                    return ver
+            except Exception:
+                continue
+
+        self._api_version = "4"
+        with _cache_lock:
+            _api_version_cache[cache_key] = "4"
+        return "4"
+
+    @property
+    def api_version(self) -> str:
+        if self._api_version is None:
+            self._detect_api_version()
+        return self._api_version
 
     def _get(self, endpoint: str) -> Optional[dict]:
+        ver = self.api_version
         try:
             resp = self.session.get(
-                f"{self.base_url}/api/4/{endpoint}",
+                f"{self.base_url}/api/{ver}/{endpoint}",
                 timeout=self.timeout,
             )
             resp.raise_for_status()
@@ -30,10 +69,10 @@ class GlancesClient:
     def get_memory(self) -> Optional[dict]:
         return self._get("mem")
 
-    def get_disk(self) -> Optional[dict]:
+    def get_disk(self) -> Optional[list]:
         return self._get("fs")
 
-    def get_network(self) -> Optional[dict]:
+    def get_network(self) -> Optional[list]:
         return self._get("network")
 
     def get_processlist(self) -> Optional[list]:
@@ -56,6 +95,33 @@ class GlancesClient:
 
     def get_all(self) -> dict:
         now = datetime.now(timezone.utc).isoformat()
+        ver = self.api_version
+
+        # Try single /all endpoint first (much faster - 1 request vs 10+)
+        try:
+            resp = self.session.get(
+                f"{self.base_url}/api/{ver}/all",
+                timeout=self.timeout,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "timestamp": now,
+                    "system": data.get("system"),
+                    "cpu": data.get("cpu"),
+                    "memory": data.get("mem"),
+                    "disk": data.get("fs"),
+                    "network": data.get("network"),
+                    "processlist": data.get("processlist"),
+                    "load": data.get("load"),
+                    "uptime": data.get("uptime"),
+                    "sensors": data.get("sensors"),
+                    "gpu": data.get("gpu"),
+                }
+        except Exception:
+            pass
+
+        # Fallback: individual endpoints
         return {
             "timestamp": now,
             "system": self.get_system(),
@@ -71,8 +137,12 @@ class GlancesClient:
         }
 
     def is_alive(self) -> bool:
+        ver = self.api_version
         try:
-            resp = self.session.get(f"{self.base_url}/api/4/version", timeout=3)
+            resp = self.session.get(
+                f"{self.base_url}/api/{ver}/version",
+                timeout=3,
+            )
             return resp.status_code == 200
         except requests.exceptions.ConnectionError:
             return False
@@ -80,3 +150,45 @@ class GlancesClient:
             return False
         except Exception:
             return False
+
+
+def fetch_machines_parallel(machines: list, max_workers: int = 10) -> list:
+    def fetch_one(m):
+        client = GlancesClient(m.host, m.port)
+        data = client.get_all()
+        data["machine"] = {
+            "id": m.id, "name": m.name, "host": m.host,
+            "icon": m.icon or "mdi:server",
+            "description": m.description or "",
+            "color": m.color or "",
+        }
+        alive = client.is_alive()
+        data["status"] = "online" if alive else "offline"
+        return data
+
+    if not machines:
+        return []
+
+    results = [None] * len(machines)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {
+            executor.submit(fetch_one, m): i
+            for i, m in enumerate(machines)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                results[idx] = future.result()
+            except Exception as e:
+                m = machines[idx]
+                results[idx] = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "machine": {
+                        "id": m.id, "name": m.name, "host": m.host,
+                        "icon": m.icon or "mdi:server",
+                        "description": m.description or "",
+                        "color": m.color or "",
+                    },
+                    "status": "offline",
+                }
+    return results

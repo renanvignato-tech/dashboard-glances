@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from app.database import get_db, DashboardLayout, DashboardPage, Machine
 from app.auth import get_current_user, require_admin, User
-from app.services.glances import GlancesClient
+from app.services.glances import GlancesClient, fetch_machines_parallel
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -48,19 +48,7 @@ def get_all_data(
             query = query.filter(Machine.id.in_(allowed_ids))
 
     machines = query.order_by(Machine.position.asc(), Machine.id.asc()).all()
-    result = []
-    for m in machines:
-        client = GlancesClient(m.host, m.port)
-        data = client.get_all()
-        data["machine"] = {
-            "id": m.id, "name": m.name, "host": m.host,
-            "icon": m.icon or "mdi:server",
-            "description": m.description or "",
-            "color": m.color or "",
-        }
-        alive = client.is_alive()
-        data["status"] = "online" if alive else "offline"
-        result.append(data)
+    result = fetch_machines_parallel(machines)
     return {"machines": result}
 
 
@@ -68,8 +56,9 @@ def get_all_data(
 def get_overview(user=Depends(get_current_user), db: Session = Depends(get_db)):
     machines = db.query(Machine).filter(Machine.enabled == True).order_by(Machine.position.asc(), Machine.id.asc()).all()
     overview = {"total": len(machines), "online": 0, "offline": 0, "machines": []}
-    for m in machines:
-        client = GlancesClient(m.host, m.port)
+
+    def check_machine(m):
+        client = GlancesClient(m.host, m.port, timeout=3)
         alive = client.is_alive()
         info = {
             "id": m.id, "name": m.name, "host": m.host,
@@ -78,15 +67,37 @@ def get_overview(user=Depends(get_current_user), db: Session = Depends(get_db)):
             "status": "online" if alive else "offline",
         }
         if alive:
-            overview["online"] += 1
             cpu = client.get_cpu()
             mem = client.get_memory()
             info["cpu_percent"] = cpu.get("total", 0) if cpu else 0
             info["mem_percent"] = mem.get("percent", 0) if mem else 0
         else:
-            overview["offline"] += 1
             info["cpu_percent"] = 0
             info["mem_percent"] = 0
+        return info
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    results = [None] * len(machines)
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(check_machine, m): i for i, m in enumerate(machines)}
+        for f in as_completed(futures):
+            idx = futures[f]
+            try:
+                results[idx] = f.result()
+            except Exception:
+                m = machines[idx]
+                results[idx] = {
+                    "id": m.id, "name": m.name, "host": m.host,
+                    "icon": m.icon or "mdi:server",
+                    "color": m.color or "",
+                    "status": "offline", "cpu_percent": 0, "mem_percent": 0,
+                }
+
+    for info in results:
+        if info["status"] == "online":
+            overview["online"] += 1
+        else:
+            overview["offline"] += 1
         overview["machines"].append(info)
     return overview
 
