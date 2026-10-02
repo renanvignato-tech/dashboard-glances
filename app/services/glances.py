@@ -8,6 +8,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 _api_version_cache: dict = {}
 _cache_lock = threading.Lock()
 
+API_PREFIX_CANDIDATES = ("4", "3")
+PROBE_TIMEOUT = 3
+
+
+def _health_endpoint(prefix: str) -> str:
+    # /api/3/version returns 400 on old Glances 3 servers,
+    # so v3 health check uses /api/3/status (returns "Active").
+    return "version" if prefix == "4" else "status"
+
 
 class GlancesClient:
     def __init__(self, host: str, port: int = 61208, timeout: int = 5):
@@ -16,46 +25,56 @@ class GlancesClient:
         self.session = requests.Session()
         self._api_version: Optional[str] = None
 
-    def _detect_api_version(self) -> str:
+    def _request(self, prefix: str, endpoint: str, timeout: int = None):
+        """Raw GET to /api/{prefix}/{endpoint}. Returns Response or None."""
+        try:
+            return self.session.get(
+                f"{self.base_url}/api/{prefix}/{endpoint}",
+                timeout=timeout or self.timeout,
+            )
+        except Exception:
+            return None
+
+    def _probe_api(self) -> Optional[str]:
+        """Detect API version. Returns '4', '3', or None (unreachable).
+        - 404 = that version doesn't exist → try next
+        - any other response (200, 400...) = version exists
+        - no response (timeout) = server unreachable → abort
+        Failure is NEVER cached.
+        """
         cache_key = self.base_url
         with _cache_lock:
             if cache_key in _api_version_cache:
-                self._api_version = _api_version_cache[cache_key]
-                return self._api_version
+                return _api_version_cache[cache_key]
 
-        for ver in ("4", "3"):
-            try:
-                resp = self.session.get(
-                    f"{self.base_url}/api/{ver}/version",
-                    timeout=3,
-                )
-                if resp.status_code == 200:
-                    self._api_version = ver
-                    with _cache_lock:
-                        _api_version_cache[cache_key] = ver
-                    return ver
-            except Exception:
-                continue
+        detected = None
+        for prefix in API_PREFIX_CANDIDATES:
+            resp = self._request(prefix, _health_endpoint(prefix), timeout=PROBE_TIMEOUT)
+            if resp is None:
+                # Server unreachable — abort, don't try other versions
+                return None
+            if resp.status_code != 404:
+                detected = prefix
+                break
 
-        self._api_version = "4"
-        with _cache_lock:
-            _api_version_cache[cache_key] = "4"
-        return "4"
+        if detected is not None:
+            with _cache_lock:
+                _api_version_cache[cache_key] = detected
+        # On failure (None): do NOT cache, so next call retries
+        return detected
 
     @property
     def api_version(self) -> str:
         if self._api_version is None:
-            self._detect_api_version()
-        return self._api_version
+            self._api_version = self._probe_api()
+        return self._api_version or "4"
 
     def _get(self, endpoint: str) -> Optional[dict]:
         ver = self.api_version
+        resp = self._request(ver, endpoint)
+        if resp is None or resp.status_code != 200:
+            return None
         try:
-            resp = self.session.get(
-                f"{self.base_url}/api/{ver}/{endpoint}",
-                timeout=self.timeout,
-            )
-            resp.raise_for_status()
             return resp.json()
         except Exception:
             return None
@@ -146,31 +165,45 @@ class GlancesClient:
         now = datetime.now(timezone.utc).isoformat()
         ver = self.api_version
 
-        # Try single /all endpoint first (much faster - 1 request vs 10+)
-        try:
-            resp = self.session.get(
-                f"{self.base_url}/api/{ver}/all",
-                timeout=self.timeout,
-            )
+        # Single /all endpoint — 1 request (v4) or 2 (v3 probe + all)
+        resp = self._request(ver, "all")
+        if resp is not None:
+            if resp.status_code == 404 and ver == "4":
+                # Maybe this server is v3 despite earlier probe
+                alt = self._request("3", "all")
+                if alt is not None and alt.status_code == 200:
+                    resp = alt
+                    ver = "3"
             if resp.status_code == 200:
-                data = resp.json()
-                return {
-                    "timestamp": now,
-                    "system": data.get("system"),
-                    "cpu": data.get("cpu"),
-                    "memory": data.get("mem"),
-                    "disk": self._filter_fs(data.get("fs")),
-                    "network": self._normalize_network(data.get("network")),
-                    "processlist": data.get("processlist"),
-                    "load": data.get("load"),
-                    "uptime": data.get("uptime"),
-                    "sensors": data.get("sensors"),
-                    "gpu": data.get("gpu"),
-                }
-        except Exception:
-            pass
+                try:
+                    data = resp.json()
+                    return {
+                        "timestamp": now,
+                        "system": data.get("system"),
+                        "cpu": data.get("cpu"),
+                        "memory": data.get("mem"),
+                        "disk": self._filter_fs(data.get("fs")),
+                        "network": self._normalize_network(data.get("network")),
+                        "processlist": data.get("processlist"),
+                        "load": data.get("load"),
+                        "uptime": data.get("uptime"),
+                        "sensors": data.get("sensors"),
+                        "gpu": data.get("gpu"),
+                    }
+                except Exception:
+                    pass
 
-        # Fallback: individual endpoints
+        # Server unreachable (timeout/connection refused) → return empty payload
+        # Don't fall back to 10 sequential endpoints (would multiply timeout)
+        if resp is None:
+            return {
+                "timestamp": now,
+                "system": None, "cpu": None, "memory": None,
+                "disk": None, "network": None, "processlist": None,
+                "load": None, "uptime": None, "sensors": None, "gpu": None,
+            }
+
+        # /all returned non-200 (not timeout) → fallback to individual endpoints
         return {
             "timestamp": now,
             "system": self.get_system(),
@@ -186,19 +219,9 @@ class GlancesClient:
         }
 
     def is_alive(self) -> bool:
-        ver = self.api_version
-        try:
-            resp = self.session.get(
-                f"{self.base_url}/api/{ver}/version",
-                timeout=3,
-            )
-            return resp.status_code == 200
-        except requests.exceptions.ConnectionError:
-            return False
-        except requests.exceptions.Timeout:
-            return False
-        except Exception:
-            return False
+        prefix = self.api_version
+        resp = self._request(prefix, _health_endpoint(prefix), timeout=PROBE_TIMEOUT)
+        return resp is not None and resp.status_code == 200
 
 
 def fetch_machines_parallel(machines: list, max_workers: int = 10) -> list:
@@ -228,7 +251,7 @@ def fetch_machines_parallel(machines: list, max_workers: int = 10) -> list:
             idx = future_to_idx[future]
             try:
                 results[idx] = future.result()
-            except Exception as e:
+            except Exception:
                 m = machines[idx]
                 results[idx] = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
