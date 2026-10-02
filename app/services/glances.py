@@ -70,6 +70,35 @@ class GlancesClient:
         return self._get("mem")
 
     @staticmethod
+    def _normalize_network(data) -> Optional[list]:
+        if not data or not isinstance(data, list):
+            return data
+        normalized = []
+        for iface in data:
+            n = dict(iface)
+            # v3: map rx/tx → bytes_recv/bytes_sent (both are deltas)
+            if n.get("bytes_recv") is None and "rx" in n:
+                n["bytes_recv"] = n.get("rx") or 0
+            if n.get("bytes_sent") is None and "tx" in n:
+                n["bytes_sent"] = n.get("tx") or 0
+            t = n.get("time_since_update") or 0
+            # Calculate rate (B/s)
+            if n.get("bytes_recv_rate_per_sec") is not None:
+                n["bytes_rate_recv"] = n["bytes_recv_rate_per_sec"]
+            elif t > 0 and n.get("bytes_recv") is not None:
+                n["bytes_rate_recv"] = n["bytes_recv"] / t
+            else:
+                n["bytes_rate_recv"] = 0
+            if n.get("bytes_sent_rate_per_sec") is not None:
+                n["bytes_rate_sent"] = n["bytes_sent_rate_per_sec"]
+            elif t > 0 and n.get("bytes_sent") is not None:
+                n["bytes_rate_sent"] = n["bytes_sent"] / t
+            else:
+                n["bytes_rate_sent"] = 0
+            normalized.append(n)
+        return normalized
+
+    @staticmethod
     def _is_virtual_fs(entry: dict) -> bool:
         device = entry.get("device_name", "") or ""
         mnt = entry.get("mnt_point", "") or ""
@@ -131,7 +160,7 @@ class GlancesClient:
                     "cpu": data.get("cpu"),
                     "memory": data.get("mem"),
                     "disk": self._filter_fs(data.get("fs")),
-                    "network": data.get("network"),
+                    "network": self._normalize_network(data.get("network")),
                     "processlist": data.get("processlist"),
                     "load": data.get("load"),
                     "uptime": data.get("uptime"),
@@ -148,7 +177,7 @@ class GlancesClient:
             "cpu": self.get_cpu(),
             "memory": self.get_memory(),
             "disk": self.get_disk(),
-            "network": self.get_network(),
+            "network": self._normalize_network(self.get_network()),
             "processlist": self.get_processlist(),
             "load": self.get_load(),
             "uptime": self.get_uptime(),

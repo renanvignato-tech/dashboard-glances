@@ -284,20 +284,12 @@ function renderNetwork() {
     html += '<div class="info-label">' + (n.interface_name || '') + '</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem">';
     html += '<div><div style="font-size:0.7rem;color:var(--text-muted)">▼ Received</div>';
-    html += '<div style="font-size:1rem;font-weight:600">' + formatBytes(n.bytes_recv || 0) + '</div></div>';
+    html += '<div style="font-size:1rem;font-weight:600">' + formatBytes(n.bytes_rate_recv || 0) + '/s</div></div>';
     html += '<div><div style="font-size:0.7rem;color:var(--text-muted)">▲ Sent</div>';
-    html += '<div style="font-size:1rem;font-weight:600">' + formatBytes(n.bytes_sent || 0) + '</div></div>';
+    html += '<div style="font-size:1rem;font-weight:600">' + formatBytes(n.bytes_rate_sent || 0) + '/s</div></div>';
     if (n.speed) {
       html += '<div><div style="font-size:0.7rem;color:var(--text-muted)">Speed</div>';
       html += '<div style="font-size:0.85rem">' + n.speed + ' Mbps</div></div>';
-    }
-    if (n.bytes_rate_recv) {
-      html += '<div><div style="font-size:0.7rem;color:var(--text-muted)">Rate ↓</div>';
-      html += '<div style="font-size:0.85rem">' + formatBytes(n.bytes_rate_recv) + '/s</div></div>';
-    }
-    if (n.bytes_rate_sent) {
-      html += '<div><div style="font-size:0.7rem;color:var(--text-muted)">Rate ↑</div>';
-      html += '<div style="font-size:0.85rem">' + formatBytes(n.bytes_rate_sent) + '/s</div></div>';
     }
     html += '</div></div>';
   });

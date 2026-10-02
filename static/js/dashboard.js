@@ -595,7 +595,7 @@ function renderMachineCard(m, filters) {
     networks.forEach(function(n) {
       if (n.interface_name && n.interface_name !== 'lo') {
         html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin:0.15rem 0">';
-        html += n.interface_name + ': ▼' + formatBytes(n.bytes_recv || 0) + ' ▲' + formatBytes(n.bytes_sent || 0) + '</div>';
+        html += n.interface_name + ': ▼' + formatBytes(n.bytes_rate_recv || 0) + '/s ▲' + formatBytes(n.bytes_rate_sent || 0) + '/s</div>';
       }
     });
     html += '</div>';
