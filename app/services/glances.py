@@ -69,8 +69,28 @@ class GlancesClient:
     def get_memory(self) -> Optional[dict]:
         return self._get("mem")
 
+    @staticmethod
+    def _is_virtual_fs(entry: dict) -> bool:
+        device = entry.get("device_name", "") or ""
+        mnt = entry.get("mnt_point", "") or ""
+        if device.startswith("/dev/loop"):
+            return True
+        if mnt.startswith("/snap/"):
+            return True
+        if mnt.startswith("/var/lib/snapd/snap/"):
+            return True
+        if device.startswith("squashfs"):
+            return True
+        return False
+
+    @staticmethod
+    def _filter_fs(data):
+        if not data or not isinstance(data, list):
+            return data
+        return [d for d in data if not GlancesClient._is_virtual_fs(d)]
+
     def get_disk(self) -> Optional[list]:
-        return self._get("fs")
+        return self._filter_fs(self._get("fs"))
 
     def get_network(self) -> Optional[list]:
         return self._get("network")
@@ -110,7 +130,7 @@ class GlancesClient:
                     "system": data.get("system"),
                     "cpu": data.get("cpu"),
                     "memory": data.get("mem"),
-                    "disk": data.get("fs"),
+                    "disk": self._filter_fs(data.get("fs")),
                     "network": data.get("network"),
                     "processlist": data.get("processlist"),
                     "load": data.get("load"),
