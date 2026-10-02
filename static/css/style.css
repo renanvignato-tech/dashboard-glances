@@ -698,7 +698,7 @@ select {
 /* ============================================================
    SETTINGS
    ============================================================ */
-.settings-page { max-width: 960px; }
+.settings-page { max-width: 1280px; }
 
 /* Tabs */
 .tabs-container { }
@@ -722,7 +722,11 @@ select {
   cursor: pointer;
   white-space: nowrap;
   transition: color 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
+.tab-btn .mdi { font-size: 1.05rem; }
 .tab-btn:hover { color: var(--text-primary); }
 .tab-btn.active {
   color: var(--accent);

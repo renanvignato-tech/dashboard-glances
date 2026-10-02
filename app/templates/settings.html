@@ -18,16 +18,16 @@
   <div class="tabs-container">
     <div class="tabs-nav" id="tabsNav">
       {% if user.role == 'admin' %}
-      <button class="tab-btn active" data-tab="tab-users">{{ translations.settings.users }}</button>
-      <button class="tab-btn" data-tab="tab-machines">{{ translations.settings.machines }}</button>
-      <button class="tab-btn" data-tab="tab-backup">{{ translations.settings.backup }}</button>
-      <button class="tab-btn" data-tab="tab-update">🔄 Atualização</button>
-      <button class="tab-btn" data-tab="tab-setup">{{ translations.settings.install }}</button>
-      <button class="tab-btn" data-tab="tab-alerts">{{ translations.settings.alerts }}</button>
+      <button class="tab-btn active" data-tab="tab-users"><span class="mdi mdi-account-group"></span> {{ translations.settings.users }}</button>
+      <button class="tab-btn" data-tab="tab-machines"><span class="mdi mdi-server"></span> {{ translations.settings.machines }}</button>
+      <button class="tab-btn" data-tab="tab-backup"><span class="mdi mdi-database-arrow-down"></span> {{ translations.settings.backup }}</button>
+      <button class="tab-btn" data-tab="tab-update"><span class="mdi mdi-update"></span> Atualização</button>
+      <button class="tab-btn" data-tab="tab-setup"><span class="mdi mdi-download"></span> {{ translations.settings.install }}</button>
+      <button class="tab-btn" data-tab="tab-alerts"><span class="mdi mdi-bell-ring"></span> {{ translations.settings.alerts }}</button>
       {% endif %}
-      <button class="tab-btn" data-tab="tab-profile">{{ translations.settings.profile }}</button>
-      <button class="tab-btn" data-tab="tab-alert-machines">📨 Máquinas de Alerta</button>
-      <button class="tab-btn" data-tab="tab-password">{{ translations.settings.change_password }}</button>
+      <button class="tab-btn" data-tab="tab-profile"><span class="mdi mdi-account"></span> {{ translations.settings.profile }}</button>
+      <button class="tab-btn" data-tab="tab-alert-machines"><span class="mdi mdi-email-alert"></span> Máquinas de Alerta</button>
+      <button class="tab-btn" data-tab="tab-password"><span class="mdi mdi-lock"></span> {{ translations.settings.change_password }}</button>
     </div>
 
     <div class="tabs-content">
@@ -287,6 +287,6 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
 
 var IS_ADMIN = {{ 'true' if user.role == 'admin' else 'false' }};
 </script>
-<script src="/static/js/settings.js"></script>
+<script src="/static/js/settings.js?v=2"></script>
 <script>loadSettings();</script>
 {% endblock %}
