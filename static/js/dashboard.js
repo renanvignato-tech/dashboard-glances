@@ -463,10 +463,7 @@ function getFilteredMachines() {
   var cpuMin = parseFloat(document.getElementById('cpuMinFilter').value) || 0;
   localStorage.setItem('cpuMinFilter', cpuMin);
   var filtered = machinesData.filter(function(m) {
-    if (!checkedMachines[m.machine.id]) return false;
-    // CPU minimum filter: hide machines with CPU below threshold (always show offline)
-    if (m.status === 'online' && m.cpu && (m.cpu.total || 0) < cpuMin) return false;
-    return true;
+    return checkedMachines[m.machine.id];
   });
   filtered.sort(function(a, b) {
     if (sortBy === 'name') return a.machine.name.localeCompare(b.machine.name);
