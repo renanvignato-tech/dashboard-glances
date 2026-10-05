@@ -615,13 +615,19 @@ function renderMachineCard(m, filters) {
   if (filters.showProc && processes.length > 0) {
     var machineUsers = checkedUsers[key] || {};
     var machineProcs = checkedProcs[key] || {};
+    var cpuCount = (m.cpu && m.cpu.cpucore) || 1;
+    var cpuMinProc = parseFloat(document.getElementById('cpuMinFilter').value) || 0;
     var filteredProcs = processes.filter(function(p) {
       var u = p.username || 'N/A';
       var n = p.name || '?';
-      return machineUsers[u] && machineProcs[n];
+      if (!machineUsers[u] || !machineProcs[n]) return false;
+      if (cpuMinProc > 0) {
+        var cpuNorm = (p.cpu_percent || 0) / cpuCount;
+        if (cpuNorm < cpuMinProc) return false;
+      }
+      return true;
     });
     var topProcs = filteredProcs.slice(0, 10);
-    var cpuCount = (m.cpu && m.cpu.cpucore) || 1;
     html += '<div style="margin-top:0.75rem"><span class="metric-label">' + t('machine.processes') + ' (' + filteredProcs.length + ' de ' + processes.length + ')</span>';
     html += '<table class="process-table"><thead><tr><th>' + t('machine.name') + '</th><th>' + t('machine.user') + '</th><th>' + t('machine.cpu_pct') + '</th><th>' + t('machine.mem_pct') + '</th></tr></thead><tbody>';
     topProcs.forEach(function(p) {

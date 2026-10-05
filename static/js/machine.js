@@ -408,9 +408,13 @@ function renderProcesses() {
 
 function renderProcessTable(procs) {
   var cpuCount = (machineData.cpu && machineData.cpu.cpucore) || 1;
+  var cpuMin = parseFloat(localStorage.getItem('cpuMinFilter')) || 0;
   var html = '';
+  var shown = 0;
   procs.forEach(function(p) {
     var cpuNorm = Math.round((p.cpu_percent || 0) / cpuCount * 10) / 10;
+    if (cpuMin > 0 && cpuNorm < cpuMin) return;
+    shown++;
     html += '<tr>';
     html += '<td>' + (p.pid || '-') + '</td>';
     html += '<td title="' + (p.cmdline || '') + '">' + (p.name || '?') + '</td>';
@@ -422,7 +426,7 @@ function renderProcessTable(procs) {
     html += '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (p.cmdline || '') + '">' + (p.cmdline || '-') + '</td>';
     html += '</tr>';
   });
-  document.getElementById('processTableBody').innerHTML = html || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">' + t('machine.no_data') + '</td></tr>';
+  document.getElementById('processTableBody').innerHTML = html || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">' + (cpuMin > 0 ? 'Nenhum processo acima de ' + cpuMin + '% CPU' : t('machine.no_data')) + '</td></tr>';
 }
 
 function filterProcesses() {
