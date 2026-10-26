@@ -589,7 +589,7 @@ function renderMachineCard(m, filters) {
     disks.forEach(function(d) {
       var dp = d.percent || 0;
       html += '<div style="display:flex;align-items:center;gap:0.5rem;margin:0.2rem 0;font-size:0.8rem">';
-      html += '<span style="width:120px;color:var(--text-secondary)">' + (d.device_name || d.mnt_point || '') + '</span>';
+      html += '<span style="width:120px;color:var(--text-secondary)">' + (d.device_name || d.mnt_point || '') + (d.label ? ' - ' + d.label : '') + '</span>';
       html += '<div class="progress-bar" style="flex:1"><div class="progress-fill ' + pctClass(dp) + '" style="width:' + dp + '%"></div></div>';
       html += '<span style="width:40px;text-align:right;color:var(--text-muted)">' + Math.round(dp) + '%</span></div>';
     });

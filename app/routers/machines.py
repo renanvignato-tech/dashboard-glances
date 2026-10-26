@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
-from app.database import get_db, Machine, User, MonitorLog
+from app.database import get_db, Machine, User, MonitorLog, DiskLabel
 from app.auth import get_current_user, require_admin
 from app.services.glances import GlancesClient
 
@@ -254,3 +254,37 @@ def test_connection(req: MachineCreate, user: User = Depends(require_admin)):
         return {"alive": False, "error": "Timeout - máquina não respondeu em 3s"}
     except Exception as e:
         return {"alive": False, "error": str(e)}
+
+
+# ============================================================
+# DISK LABELS
+# ============================================================
+
+class DiskLabelUpdate(BaseModel):
+    labels: dict  # {"device_name": "label", ...}
+
+
+@router.get("/{machine_id}/disk-labels")
+def get_disk_labels(machine_id: int, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.query(DiskLabel).filter(DiskLabel.machine_id == machine_id).all()
+    return {r.device_name: r.label for r in rows}
+
+
+@router.put("/{machine_id}/disk-labels")
+def set_disk_labels(machine_id: int, req: DiskLabelUpdate, user=Depends(require_admin), db: Session = Depends(get_db)):
+    for device, label in req.labels.items():
+        label = (label or "").strip()
+        row = db.query(DiskLabel).filter(
+            DiskLabel.machine_id == machine_id,
+            DiskLabel.device_name == device,
+        ).first()
+        if label:
+            if row:
+                row.label = label
+            else:
+                db.add(DiskLabel(machine_id=machine_id, device_name=device, label=label))
+        else:
+            if row:
+                db.delete(row)
+    db.commit()
+    return {"message": "Labels atualizados"}

@@ -40,15 +40,22 @@ function loadMachineDetail() {
       return;
     }
     machineData = data;
-    renderHeader();
-    renderOverview();
-    renderCpu();
-    renderMemory();
-    renderDisk();
-    renderNetwork();
-    renderSensors();
-    renderGPU();
-    renderProcesses();
+    api('GET', '/machines/' + MACHINE_ID + '/disk-labels').then(function(labels) {
+      _diskLabels[MACHINE_ID] = labels || {};
+      var disks = machineData.disk || [];
+      disks.forEach(function(d) {
+        d.label = (labels || {})[d.device_name] || '';
+      });
+      renderHeader();
+      renderOverview();
+      renderCpu();
+      renderMemory();
+      renderDisk();
+      renderNetwork();
+      renderSensors();
+      renderGPU();
+      renderProcesses();
+    });
   }).catch(function(err) {
     console.error('Erro ao carregar detalhe:', err);
   });
@@ -247,14 +254,27 @@ function renderDisk() {
     return;
   }
   var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:0.75rem">';
-  disks.forEach(function(d) {
+  disks.forEach(function(d, i) {
     var pct = d.percent || 0;
+    var label = d.label || '';
     html += '<div class="info-card">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">';
-    html += '<div><div class="info-label">' + (d.device_name || '') + '</div>';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div class="info-label" style="display:flex;align-items:center;gap:0.4rem">';
+    html += (d.device_name || '');
+    if (label) html += '<span style="color:var(--accent);font-weight:600;font-size:0.85rem">· ' + label + '</span>';
+    html += '<span style="cursor:pointer;font-size:0.75rem;color:var(--text-muted)" onclick="editDiskLabel(' + i + ')" title="Renomear disco">✏</span>';
+    html += '</div>';
     html += '<div class="info-value" style="font-size:0.9rem">' + (d.mnt_point || '') + '</div></div>';
     html += '<div style="font-size:1.1rem;font-weight:700;color:' + gaugeColor(pct) + '">' + Math.round(pct) + '%</div>';
     html += '</div>';
+    html += '<div id="diskLabelEdit' + i + '" style="display:none;margin-bottom:0.5rem">';
+    html += '<input type="text" id="diskLabelInput' + i + '" value="' + label.replace(/"/g, '&quot;') + '" placeholder="Nome do disco (ex: disk01)"';
+    html += ' style="width:100%;padding:0.3rem;font-size:0.8rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-secondary);color:var(--text-primary)">';
+    html += '<div style="margin-top:0.3rem;display:flex;gap:0.4rem">';
+    html += '<button class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.75rem" onclick="saveDiskLabel(' + i + ')">Salvar</button>';
+    html += '<button class="btn-secondary" style="padding:0.2rem 0.6rem;font-size:0.75rem" onclick="document.getElementById(\'diskLabelEdit' + i + '\').style.display=\'none\'">Cancelar</button>';
+    html += '</div></div>';
     html += '<div class="progress-bar" style="height:6px"><div class="progress-fill ' + pctClass(pct) + '" style="width:' + pct + '%"></div></div>';
     html += '<div style="display:flex;justify-content:space-between;margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted)';
     html += '"><span>' + formatBytes(d.size) + ' total</span>';
@@ -265,6 +285,29 @@ function renderDisk() {
   });
   html += '</div>';
   document.getElementById('diskList').innerHTML = html;
+}
+
+var _diskLabels = {};
+
+function editDiskLabel(idx) {
+  var el = document.getElementById('diskLabelEdit' + idx);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') {
+    document.getElementById('diskLabelInput' + idx).focus();
+  }
+}
+
+function saveDiskLabel(idx) {
+  var device = (machineData.disk[idx] || {}).device_name || '';
+  var label = document.getElementById('diskLabelInput' + idx).value.trim();
+  if (!_diskLabels[MACHINE_ID]) _diskLabels[MACHINE_ID] = {};
+  _diskLabels[MACHINE_ID][device] = label;
+  api('PUT', '/machines/' + MACHINE_ID + '/disk-labels', { labels: _diskLabels[MACHINE_ID] }).then(function(res) {
+    if (res.message) {
+      machineData.disk[idx].label = label;
+      renderDisk();
+    }
+  });
 }
 
 // ============================================================

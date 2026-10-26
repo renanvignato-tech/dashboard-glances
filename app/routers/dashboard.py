@@ -49,6 +49,20 @@ def get_all_data(
 
     machines = query.order_by(Machine.position.asc(), Machine.id.asc()).all()
     result = fetch_machines_parallel(machines)
+
+    # Attach disk labels
+    from app.database import DiskLabel
+    labels = {}
+    for row in db.query(DiskLabel).all():
+        labels.setdefault(row.machine_id, {})[row.device_name] = row.label
+    for r in result:
+        mid = r["machine"]["id"]
+        r["disk_labels"] = labels.get(mid, {})
+        disks = r.get("disk") or []
+        ml = labels.get(mid, {})
+        for d in disks:
+            d["label"] = ml.get(d.get("device_name", ""), "")
+
     return {"machines": result}
 
 

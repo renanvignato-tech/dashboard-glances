@@ -157,6 +157,15 @@ class UserAlertMachine(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class DiskLabel(Base):
+    __tablename__ = "disk_labels"
+    id = Column(Integer, primary_key=True, index=True)
+    machine_id = Column(Integer, nullable=False, index=True)
+    device_name = Column(String(255), nullable=False)
+    label = Column(String(100), default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
